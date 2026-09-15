@@ -1,0 +1,24 @@
+{
+  "name": "agent-control-center",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:lan": "concurrently -n api,web -c blue,magenta \"npm run dev:api:lan\" \"npm run dev:web:lan\"",
+    "dev:api": "python -m uvicorn control_center.main:app --app-dir apps/api --host 127.0.0.1 --port 8765",
+    "dev:api:lan": "python -m uvicorn control_center.main:app --app-dir apps/api --host 0.0.0.0 --port 8765",
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:web:lan": "npm run dev --workspace apps/web -- --host 0.0.0.0",
+    "serve:lan": "python -m uvicorn control_center.main:app --app-dir apps/api --host 0.0.0.0 --port 8765",
+    "test": "python -m pytest apps/api/tests && npm run test --workspace apps/web",
+    "test:e2e": "playwright test --config playwright.synthetic.config.ts",
+    "build": "npm run build --workspace apps/web"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "concurrently": "^9.2.1"
+  },
+  "license": "MIT"
+}

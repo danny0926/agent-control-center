@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=75,<83"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["apps/api"]
+include = ["control_center*"]
+
+[project]
+name = "agent-control-center-api"
+version = "0.1.0"
+description = "Local-first API for Agent Control Center"
+requires-python = ">=3.12"
+license = {file = "LICENSE"}
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.34,<1",
+  "pydantic>=2.10,<3",
+  "tzdata>=2025.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9", "httpx>=0.28,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/api/tests"]
+pythonpath = ["apps/api"]

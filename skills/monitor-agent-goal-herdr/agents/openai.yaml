@@ -1,0 +1,4 @@
+interface:
+  display_name: "Monitor Agent Goal (Herdr)"
+  short_description: "監看 Codex /goal，留下證據並在必要時開決策卡"
+  default_prompt: "Monitor the selected Codex /goal through Herdr in notify-only mode."
