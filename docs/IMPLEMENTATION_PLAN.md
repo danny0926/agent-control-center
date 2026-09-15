@@ -2,7 +2,7 @@
 
 狀態：`in_progress`；MVP-A 單機通知、安全預設與 owner-attested 驗收已實作，驗證範圍見 [交付紀錄](MVP_A_DELIVERY.md)。本文工作包是完整後續計畫，不能由部分測試通過推定全部完成。
 
-目前邊界：通知中心、網頁開啟時桌面提醒、驗收紀錄與安全啟動已有程式；瀏覽器／OS 實機證據仍須按當次交付列明。fleet、多人節點 ACL、額度管理、自動派工、隔離 worker、關頁 Web Push 尚未完成，也未授權接管其他電腦。公開 owner 未定案；LICENSE 已選 MIT，第一階段只使用擁有者自己的電腦。實際已接線契約見 [API_CONTRACT.md](API_CONTRACT.md)。
+目前邊界：通知中心、網頁開啟時桌面提醒、驗收紀錄與安全啟動已有程式；瀏覽器／OS 實機證據仍須按當次交付列明。fleet、多人節點 ACL、額度管理、自動派工、隔離 worker、關頁 Web Push 尚未完成，也未授權接管其他電腦。公開 owner 已選 A-D-Aperture；LICENSE 已選 MIT，第一階段只使用擁有者自己的電腦。實際已接線契約見 [API_CONTRACT.md](API_CONTRACT.md)。
 
 規劃日期：2026-09-15。依據：[PRD](PRD.md)、[前端規格](FRONTEND_SPEC.md)、[Agent adapter](AGENT_ADAPTERS.md)、根目錄 `AGENTS.md` 與目前程式／測試。
 
@@ -186,7 +186,7 @@ GitHub Template 適合建立自己的起始 repo，不提供自動升級；同�
 
 公開發布工作包括：乾淨環境安裝、Python/Node 依賴可重現、空資料庫啟動、單機／fleet 限制說明、安全啟動設定、授權檔、貢獻／安全回報說明、CI、秘密與個資檢查、第三方檔案來源檢查。首次 CI 使用 GitHub-hosted runner，公開 PR 不直接落到團隊個人電腦或帶內部憑證的 worker。
 
-LICENSE 已選 MIT；公開 owner 尚待使用者定案，計畫以 organization 為建議，不代替所有權決策。此選擇只影響公開發布；不阻塞本機功能設計、fixture 或測試開發。
+LICENSE 已選 MIT；公開 owner 已選 A-D-Aperture。公開產品原始碼與未追蹤的私人部署資料分開，第一階段使用單機模式。
 
 ## 7. 派工與整合順序
 
@@ -258,7 +258,7 @@ R01／R02 可先以 M01 fixture 平行開發；向真實多人部署前仍須通
 
 | 事項 | 規劃預設 | 影響哪一步 |
 | --- | --- | --- |
-| 公開 owner 與 license | MIT 已定案；公開 owner 待決定 | O01 公開發布，其他本機實作可先走 |
+| 公開 owner 與 license | MIT；A-D-Aperture organization | O01 公開發布 |
 | 機器／OS 清單 | 第一階段只用擁有者自己的 Windows 電腦；多機測試延後 | M02/V01 實機矩陣 |
 | AI 帳號與可查額度介面 | 手動／未知可誠實展示；不搬憑證，不推定共享 | R01 provider adapter、R03 真實預算 |
 | 中央登入、穩定網址與資料保存位置 | 自架、摘要最小化；不擅自開付費服務或重啟既有 tunnel | M01 遠端pilot、N03 push |

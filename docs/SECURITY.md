@@ -19,7 +19,7 @@
 
 不要提交 `.env`、provider token、節點私鑰、資料庫、個人路徑、terminal transcript 或隧道資訊。私有 deployment repo 也應只存設定宣告與 secret reference。每個安裝的 owner 自行配置秘密，升級工具不能自動替換既有帳密。
 
-公開 PR 只在無內部資料的 GitHub-hosted runner 驗證，不直接交給個人電腦或帶秘密的 self-hosted worker。CI 不接收部署權限、不發布 release。原始碼採用 [MIT](../LICENSE) 授權；公開 repository 歸屬尚待決定。
+公開 PR 只在無內部資料的 GitHub-hosted runner 驗證，不直接交給個人電腦或帶秘密的 self-hosted worker。CI 不接收部署權限、不發布 release。原始碼採用 [MIT](../LICENSE) 授權；公開 repository 位於 `A-D-Aperture/agent-control-center`。
 
 ## 回報問題
 
