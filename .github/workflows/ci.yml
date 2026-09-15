@@ -15,7 +15,7 @@ jobs:
     env:
       CONTROL_CENTER_MODE: standalone
       CONTROL_CENTER_ALLOWED_ACTIONS: ''
-      CONTROL_CENTER_DB: ${{ runner.temp }}/acc-tests/control-center.db
+      CONTROL_CENTER_DB: data/ci-control-center.db
       CONTROL_CENTER_BACKGROUND_ENABLED: '0'
       HERDR_ENV: '0'
     steps:
