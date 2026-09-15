@@ -33,6 +33,6 @@
 
 ## 發布與部署決策
 
-LICENSE 已決定採 MIT；公開 repository 已選定為 `A-D-Aperture/agent-control-center`。公開產品原始碼與私有部署設定分開，秘密只放各安裝的未追蹤設定或 secret store。
+LICENSE 已決定採 MIT；公開 repository 已選定為 `danny0926/agent-control-center`。公開產品原始碼與私有部署設定分開，秘密只放各安裝的未追蹤設定或 secret store。
 
 第一階段已決定只使用擁有者自己的 Windows 電腦，沿用單機模式與既有登入設定。跨機器 pilot 延後；未來擴充才需要確認節點、中央登入與共享範圍。AI 額度來源仍未指定，不自行存取或搬移帳號憑證。

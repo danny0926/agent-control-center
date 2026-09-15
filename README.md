@@ -45,7 +45,7 @@ Herdr socket 與 Agent session 讀取資訊。GitHub Template 可用來建立多
 中央控制台需要明確的節點身分、受驗證的節點連線、專案與 session 對應、
 以及跨節點權限與證據隔離。
 
-`fleet` 模式目前拒絕啟用；跨機器唯讀總覽、個人 ACL、額度池、派工、受管 worker 與關頁 Web Push 尚未完成。後續順序見[實作計畫](docs/IMPLEMENTATION_PLAN.md)。授權採用 [MIT](LICENSE)。第一階段只在擁有者自己的電腦部署；公開模板位於 [A-D-Aperture/agent-control-center](https://github.com/A-D-Aperture/agent-control-center)。
+`fleet` 模式目前拒絕啟用；跨機器唯讀總覽、個人 ACL、額度池、派工、受管 worker 與關頁 Web Push 尚未完成。後續順序見[實作計畫](docs/IMPLEMENTATION_PLAN.md)。授權採用 [MIT](LICENSE)。第一階段只在擁有者自己的電腦部署；公開模板位於 [danny0926/agent-control-center](https://github.com/danny0926/agent-control-center)。
 
 ## 驗證
 
