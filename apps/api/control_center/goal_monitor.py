@@ -6,10 +6,12 @@ import re
 import subprocess
 import threading
 import time
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .herdr_adapter import HerdrUnavailable, list_project_agents, read_agent_output
+from .codex_goals_db import NativeGoalRecord, lookup_native_goal, lookup_native_goals
 from .models import GoalSessionCandidate, MonitorSnapshot
 
 
@@ -73,7 +75,8 @@ def _reverse_lines(path: Path, chunk_size: int = 64 * 1024, max_bytes: int | Non
 
 
 def _goal_from_transcript(
-    path: Path, session_id: str, cwd: str, *, max_scan_bytes: int | None = None
+    path: Path, session_id: str, cwd: str, *, max_scan_bytes: int | None = None,
+    native_goals: Mapping[str, NativeGoalRecord] | None = None,
 ) -> GoalSessionCandidate | None:
     latest: dict | None = None
     creation: dict | None = None
@@ -128,18 +131,33 @@ def _goal_from_transcript(
         updated_at = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
     except ValueError:
         updated_at = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+    epoch_verified = goal_id is not None
+    status = str(goal.get("status") or "unknown")
+    tokens_used = goal.get("tokensUsed") if isinstance(goal.get("tokensUsed"), int) else None
+    time_used_seconds = goal.get("timeUsedSeconds") if isinstance(goal.get("timeUsedSeconds"), int) else None
+    native_goal = lookup_native_goal(session_id) if native_goals is None else native_goals.get(session_id)
+    if native_goal is not None:
+        if native_goal.objective.strip() == objective.strip():
+            goal_id = native_goal.goal_id
+            identity_evidence = ["Codex goals_1.sqlite thread_goals.goal_id"]
+            epoch_verified = True
+            status = native_goal.status
+            tokens_used = native_goal.tokens_used
+            time_used_seconds = native_goal.time_used_seconds
+        else:
+            identity_evidence.append("goals_1.sqlite objective 與 transcript 不一致，未採用")
     return GoalSessionCandidate(
         session_id=session_id,
         provider="codex",
         goal_id=goal_id,
-        epoch_verified=goal_id is not None,
+        epoch_verified=epoch_verified,
         identity_evidence=identity_evidence,
         objective=objective.strip(),
-        status=str(goal.get("status") or "unknown"),
+        status=status,
         cwd=cwd,
         updated_at=updated_at,
-        tokens_used=goal.get("tokensUsed") if isinstance(goal.get("tokensUsed"), int) else None,
-        time_used_seconds=goal.get("timeUsedSeconds") if isinstance(goal.get("timeUsedSeconds"), int) else None,
+        tokens_used=tokens_used,
+        time_used_seconds=time_used_seconds,
     )
 
 
@@ -166,7 +184,7 @@ def discover_goal_sessions(project_root: str, limit: int = 12) -> list[GoalSessi
             files = sorted(candidates, key=lambda item: item.stat().st_mtime, reverse=True)[:250]
         except OSError as error:
             raise GoalMonitorUnavailable("無法索引 Codex goal sessions。") from error
-        results: list[GoalSessionCandidate] = []
+        session_files: list[tuple[Path, str, str]] = []
         for path in files:
             metadata = _session_metadata(path)
             if metadata is None:
@@ -174,7 +192,14 @@ def discover_goal_sessions(project_root: str, limit: int = 12) -> list[GoalSessi
             session_id, cwd = metadata
             if not _is_within_project(cwd, project_root):
                 continue
-            goal = _goal_from_transcript(path, session_id, cwd, max_scan_bytes=4 * 1024 * 1024)
+            session_files.append((path, session_id, cwd))
+        native_goals = lookup_native_goals([session_id for _, session_id, _ in session_files])
+        results: list[GoalSessionCandidate] = []
+        for path, session_id, cwd in session_files:
+            goal = _goal_from_transcript(
+                path, session_id, cwd, max_scan_bytes=4 * 1024 * 1024,
+                native_goals=native_goals,
+            )
             if goal is not None:
                 results.append(goal)
             if len(results) >= limit:
