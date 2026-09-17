@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .goal_monitor import _is_within_project
+from .codex_exec_binding import bind_child_session
 from .models import AgentDelegation, GoalSessionCandidate
 
 
@@ -239,6 +240,7 @@ def _scan_session(path: Path, project_root: str) -> tuple[list[GoalSessionCandid
                         continue
                     launched_model = _model_from_command(command)
                     requested = _requested_model(current_goal.objective if current_goal else None)
+                    binding = bind_child_session(command, project_root)
                     delegations[delegation_id] = AgentDelegation(
                         id=delegation_id, parent_provider="claude",
                         parent_session_id=str(session_id or path.stem),
@@ -254,6 +256,19 @@ def _scan_session(path: Path, project_root: str) -> tuple[list[GoalSessionCandid
                         started_at=when, updated_at=when,
                         evidence=["Claude tool_use 精確記錄 codex exec", "尚未取得 child session identity；不以 cwd 或時間猜測"],
                     )
+                    if binding is not None:
+                        delegation = delegations[delegation_id]
+                        delegation.child_session_id = binding.thread_id
+                        delegation.goal_binding = "verified"
+                        delegation.observed_model = binding.observed_model
+                        delegation.observed_model_compliance = _models_match(requested, binding.observed_model)
+                        delegation.evidence = [
+                            "Claude tool_use 精確記錄 codex exec",
+                            f"thread.started 事件檔取得 child thread {binding.thread_id}",
+                            f"對應唯一 rollout：{binding.rollout_path.name}",
+                        ]
+                        if binding.observed_model:
+                            delegation.evidence.append(f"rollout turn_context 實際模型 {binding.observed_model}")
                     tool_to_delegation[tool_id] = delegation_id
                 elif name == "TaskStop":
                     task_id = str(inputs.get("task_id") or "")
