@@ -1,6 +1,7 @@
 # Orca 整合設計：ACC 收斂為驗收層
 
-狀態：`proposal`。本文是設計提案，尚未實作，也尚未取得任何實機證據。
+狀態：`proposal`。本文是設計提案，尚未實作。
+除 §5.1 的 `/goal` 綁定已在本機核對外，其餘尚未取得實機證據。
 提案日期：2026-09-17。
 
 參與討論：Claude Opus 5（讀 Orca 原始碼、盤點介面）、gpt-6-astra（架構與模組去留）。
@@ -151,15 +152,37 @@ hash 能檢查保存內容是否被變動；它不能證明測試正確、提交
 3. 新工作一律在 Orca；既有 Herdr 工作自然結束，歷史證據留在 ACC。
 4. 移除 Herdr 傳訊、pane 管理與新綁定入口，最後刪除 adapter。
 
-### 5.1 遷移門檻：精確 `/goal` 綁定
+### 5.1 `/goal` 綁定：已查證，不是門檻
 
-ACC 的獨立監工依賴精確的 `/goal` session 識別。
-**尚未確認 Orca 的公開 CLI 能提供等價識別**，且不能用 worktree ID、pane ID
-或 prompt 字串替代。
+**結論：`/goal` 綁定不依賴 Herdr，也不依賴 Orca。** 原先把它列為遷移門檻是找錯方向。
 
-若缺原生識別，新增 ACC 自己的 `monitor_binding_id`，由實作者與查核者提交結構化綁定資料，
-並標示為「ACC 工作契約綁定」。在解決之前該能力必須顯示為未支援，
-不得宣稱已完成「精確原生 `/goal` 綁定」。
+`/goal` 是 Codex CLI 自己的功能，狀態寫在兩個地方，與誰啟動那個終端機無關：
+
+| 來源 | 內容 |
+| --- | --- |
+| `~/.codex/goals_1.sqlite` 的 `thread_goals` | **原生 `goal_id`**、`thread_id`、`objective`、`status`（`active` / `paused` / `blocked` / `usage_limited` / `budget_limited` / `complete`）、`token_budget`、`tokens_used`、`time_used_seconds`、`created_at_ms`、`updated_at_ms` |
+| `~/.codex/sessions/**/rollout-<ts>-<thread_id>.jsonl` | 逐筆 transcript，檔名尾碼即 `thread_id` |
+
+2026-09-17 在本機核對：`thread_goals` 9 筆，**9/9 的 `thread_id` 都能對到
+`sessions/` 底下唯一一個 rollout 檔**。`goal_monitor.py:_sessions_root()` 本來就直接讀
+`~/.codex/sessions`，Herdr 只被用在 `list_project_agents` 與 `read_agent_output`
+這條終端機刮取路徑上——那條路徑本來就要退場。
+
+#### 順帶修掉一個既有缺陷
+
+`IMPLEMENTATION_PLAN.md` 記載「Codex 缺原生 goal ID 時以更新時間補 ID」。
+**原生 `goal_id` 其實存在**，只是 `_goal_from_transcript` 沒去讀它。
+改讀 `thread_goals` 可同時解掉 goal epoch 的推測問題，不必等 Orca 遷移。
+
+#### 仍要承認的限制
+
+1. `goals_1.sqlite` 是 Codex 私有 schema（內有 `_sqlx_migrations`，檔名 `_1` 顯示它會改版）。
+   讀它等於依賴 Codex 內部，風險等級與依賴 Orca 內部相同。必須唯讀、必須放在帶 schema 檢查的
+   adapter 後面、不符時回報 `unverifiable` 而**不是退回猜測**。
+2. 它綁在 **使用者家目錄**。Orca 若把 Codex 跑在 SSH 遠端或 WSL，goals db 在**那台主機**上，
+   不在本機。遠端 worktree 的 `/goal` 綁定在第一版顯示為未支援。
+3. **只有 Codex 有 `/goal`。** Claude 無等價物，`claude_activity.py` 目前以相同 objective 文字合併。
+   這個不對稱不會因為換成 Orca 而消失，不得把兩者當成同強度的識別。
 
 ## 6. 模組逐一處置
 
@@ -171,7 +194,7 @@ ACC 的獨立監工依賴精確的 `/goal` session 識別。
 | `models.py` | 改寫邊界 | 分開執行觀察、實作者主張、查核報告、owner 驗收，禁止隱式轉換 |
 | `importer.py` | 保留但縮限 | 唯讀登錄 repo／匯入成果文件；**不替 Orca 建工作 worktree** |
 | `main.py` | 瘦身、拆分 | 移除 pane／傳訊／shell 路由；拆成成果、證據、驗收、決策、整合健康 |
-| `goal_monitor.py` | 保留領域邏輯、換 transport | 僅對明確 binding 巡查；缺資料回報 `unverifiable`；固定 notify-only |
+| `goal_monitor.py` | **保留並升級**（§7.2） | 識別改讀 `thread_goals` 原生 `goal_id`；移除 `herdr_adapter` import；缺資料回報 `unverifiable`；固定 notify-only |
 | `event_collector.py` | 改寫 | 收集有來源的觀察、去重、記錄缺口；不再把文字解析成任務真相 |
 | `notifications.py` | 保留但縮限 | 只通知待驗收、過期、Decision Card、巡查失聯；agent 完成／等待交給 Orca |
 | `claude_activity.py` | 刪除活動推測職責 | 若仍需讀 Claude 結構化資料，另設狹窄 reader；終端解析不進入驗收判定 |
@@ -181,12 +204,34 @@ ACC 的獨立監工依賴精確的 `/goal` session 識別。
 UI 只留三個主要入口：**成果**、**待驗收／待決策**、**驗收歷史**。
 agent 狀態縮成成果旁的背景資訊，點擊可複製定位資訊回 Orca 操作。
 
-## 7. 兩方分歧
+## 7. 已收斂的兩項決定
 
-| 議題 | 分歧 | 處置 |
-| --- | --- | --- |
-| Decision Card 與 Orca gate | Orca 已有 `orchestration gate create/resolve/list`。ACC 是否該自建 Decision Card？ | 未收斂。傾向：ACC 只產生「需要決定」的報告，互動式 gate 交給 Orca，避免兩套待辦。需實機確認 gate 的語意是否夠用 |
-| `goal_monitor.py` 保留程度 | 一方傾向大幅縮減甚至退場，一方傾向保留領域邏輯只換 transport | 依 §5.1 的 `/goal` 綁定實測結果決定 |
+兩項原本未收斂的分歧已由 owner 於 2026-09-17 決定。
+
+### 7.1 Decision Card 交給 Orca gate
+
+**決定：ACC 只產生「需要決定」的報告，互動式 gate 交給 Orca
+（`orchestration gate create/resolve/list`），不自建第二套待辦。**
+
+ACC 產出的是查核報告與其中的待決事項；owner 在 Orca 裡處理 gate。
+ACC 保存 gate 的外部參照，不複製其狀態機。
+
+未完成的查證：Orca gate 的語意是否足以承載 ACC 的待決事項（欄位、解析結果的可追溯性、
+與成果節點的對應）。**這一項列入階段 0 的實機確認清單**；若確認不足，
+退路是 ACC 只在報告內以純文字呈現待決事項，仍不自建 gate。
+
+### 7.2 `goal_monitor.py` 保留並升級
+
+**決定：保留，且要有 `/goal`。**
+
+依 §5.1 的查證結果，這是可行的，而且不需要等 Orca：
+
+- 識別來源從 transcript 推測改為 `thread_goals` 的**原生 `goal_id`**。
+- 移除 `herdr_adapter` 的 import；巡查輸入改為 goals db ＋ rollout 檔 ＋ git 證據。
+- 維持 notify-only，維持「缺資料回報 `unverifiable`」。
+- 遠端／WSL 情境與 Claude 側顯示為未支援，不以其他 ID 代替。
+
+因為這條路徑完全不經過終端機管理器，**它可以排在階段 1，不必等接 Orca**。
 
 ## 8. 分階段實施與通過條件
 
@@ -194,10 +239,10 @@ agent 狀態縮成成果旁的背景資訊，點擊可複製定位資訊回 Orca
 
 | 階段 | 內容 | 通過條件 |
 | --- | --- | --- |
-| 0 保存基準、確認介面 | 安裝 Orca 並實跑一個真實交付週期；備份 SQLite 與證據；鎖定 Orca 版本；錄製 CLI fixtures；盤點 goal 識別 | 備份可還原並重算 hash；fixtures 涵蓋正常、斷線、重啟；每項必要識別有「可取得／不支援」紀錄 |
-| 1 建立獨立驗收核心 | 拆狀態、條件 revision、證據包、owner API | **不啟動 Orca 與 Herdr 也能完成驗收**；agent 宣告 `done` 不改變驗收狀態；版本錯誤、過期、hash 不符皆被阻擋 |
+| 0 保存基準、確認介面 | 安裝 Orca 並實跑一個真實交付週期；備份 SQLite 與證據；鎖定 Orca 版本；錄製 CLI fixtures；**確認 gate 語意是否夠承載待決事項（§7.1）** | 備份可還原並重算 hash；fixtures 涵蓋正常、斷線、重啟；gate 欄位對應表寫出「夠用／不夠用」與依據 |
+| 1 建立獨立驗收核心 ＋ `/goal` 原生綁定 | 拆狀態、條件 revision、證據包、owner API；`goal_monitor` 改讀 `thread_goals`（§7.2） | **不啟動 Orca 與 Herdr 也能完成驗收**；agent 宣告 `done` 不改變驗收狀態；版本錯誤、過期、hash 不符皆被阻擋；每個 monitor 綁定都帶原生 `goal_id`，schema 不符時回報 `unverifiable` 而非猜測 |
 | 2 接入唯讀 Orca | CLI adapter、明確工作綁定、來源與新鮮度標示 | 重複輪詢不產生重複領域事件；Orca 中斷顯示 `unknown`；重啟不誤綁其他 session；執行紀錄中無傳訊或建立工作的命令 |
-| 3 移植獨立巡查 | 不同 session 的查核者、固定證據輸入、報告與 Decision Card | 刻意失敗測試／缺證據／錯 commit 三組案例分別得到失敗／不可驗證／版本不符；查核者無法建立 owner 驗收 |
+| 3 移植獨立巡查 | 不同 session 的查核者、固定證據輸入、查核報告；待決事項輸出為 Orca gate 參照（§7.1） | 刻意失敗測試／缺證據／錯 commit 三組案例分別得到失敗／不可驗證／版本不符；查核者無法建立 owner 驗收；ACC 內不存在第二套待辦狀態機 |
 | 4 退役 Herdr | 舊綁定結案、移除程式與 UI 入口 | 無 Herdr 安裝的環境可跑完「成果→實作→證據→巡查→owner 驗收」；舊歷史可查閱；執行紀錄無 Herdr／capture-pane 呼叫 |
 | 5 選擇性即時事件 | 若輪詢確實不足，再加薄 plugin | 事件重複、亂序、斷線不會改錯狀態；停用 plugin 後仍能 CLI 降級與獨立驗收 |
 
