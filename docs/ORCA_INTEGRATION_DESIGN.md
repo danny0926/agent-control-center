@@ -233,6 +233,56 @@ ACC 保存 gate 的外部參照，不複製其狀態機。
 
 因為這條路徑完全不經過終端機管理器，**它可以排在階段 1，不必等接 Orca**。
 
+### 7.3 subagent 外包的 delegation 證據鏈
+
+**決定：`codex-worker` subagent 回報 `thread_id`，ACC 用它補完 delegation 鏈。**
+
+ACC 早已有 `AgentDelegation`（`claude_activity.py:_delegation_identity`），
+以 `(session_id, tool_use_id)` 把一次 Claude `/goal` 與一次 `codex exec` 配對，
+並比對 requested／launched model、追 TaskStop 結果鏈。缺的只是 Codex 那一端的原生識別。
+
+#### 已查證的事實（2026-09-17 本機實測）
+
+| 查證項 | 結果 |
+| --- | --- |
+| `codex exec` 有無 `--goal` 旗標 | **沒有**。整份 `--help` 無 goal 字樣 |
+| `codex exec` 會不會建立 Codex `/goal` | **不會**。實跑一次後 `thread_goals` 無對應 row |
+| `codex exec --json` 有無原生識別 | **有**。第一行即 `{"type":"thread.started","thread_id":"…"}` |
+| 該 `thread_id` 有無 transcript | **有**。對到唯一一個 `sessions/**/rollout-*-<thread_id>.jsonl` |
+
+結論：**Codex 的 `/goal` 是 TUI 專屬功能，接不上非互動的 `codex exec`。**
+不要嘗試把它硬接上去；要的識別由 `thread.started` 提供。
+
+#### 證據鏈
+
+```text
+Claude 原生 goal_id（attachment.goal_status）
+  → AgentDelegation(session_id, tool_use_id)      ← ACC 已有
+  → codex thread_id（thread.started 第一行）       ← 本次補上
+  → sessions/**/rollout-*-<thread_id>.jsonl       ← 執行證據
+```
+
+全程原生 ID，不經 Herdr、不經 Orca、不含猜測。因此**排在階段 1**。
+
+#### 已實施的改動
+
+`~/.claude/agents/codex-worker.md`（使用者全域設定，非本 repo）已加上：
+`--json` 旗標、stdout 導向事件檔、從第一行取 `thread_id` 的步驟，
+以及回報必須附上 `thread_id`。
+
+該 agent 明確禁止用時間、cwd 或「最新的 rollout 檔」推測是哪一次執行——
+平行外包時那會綁錯對象。這與 §9.2 的原則一致。
+
+#### 限制
+
+1. **只涵蓋由 `codex-worker` 發動的外包。** 使用者自己在 TUI 開的 Codex pane
+   走的是 `thread_goals` 那條路（§5.1），兩條路並存，不可混用識別。
+2. Claude 側的 `/goal` 是 Claude Code 內建功能，其 transcript 格式非公開契約，
+   與讀 `goals_1.sqlite` 同屬依賴內部；處置方式相同：唯讀、帶格式檢查、
+   不符時回報 `unverifiable`。
+3. `thread_id` 證明的是「哪一次執行」，**不證明那次執行達成了需求**。
+   驗收仍然只能由 owner 依 §4 的模型作出。
+
 ## 8. 分階段實施與通過條件
 
 通過條件一律是可檢驗的證據，不是完成度百分比。每階段通過才進下一階段。
@@ -240,7 +290,7 @@ ACC 保存 gate 的外部參照，不複製其狀態機。
 | 階段 | 內容 | 通過條件 |
 | --- | --- | --- |
 | 0 保存基準、確認介面 | 安裝 Orca 並實跑一個真實交付週期；備份 SQLite 與證據；鎖定 Orca 版本；錄製 CLI fixtures；**確認 gate 語意是否夠承載待決事項（§7.1）** | 備份可還原並重算 hash；fixtures 涵蓋正常、斷線、重啟；gate 欄位對應表寫出「夠用／不夠用」與依據 |
-| 1 建立獨立驗收核心 ＋ `/goal` 原生綁定 | 拆狀態、條件 revision、證據包、owner API；`goal_monitor` 改讀 `thread_goals`（§7.2） | **不啟動 Orca 與 Herdr 也能完成驗收**；agent 宣告 `done` 不改變驗收狀態；版本錯誤、過期、hash 不符皆被阻擋；每個 monitor 綁定都帶原生 `goal_id`，schema 不符時回報 `unverifiable` 而非猜測 |
+| 1 建立獨立驗收核心 ＋ `/goal` 原生綁定 | 拆狀態、條件 revision、證據包、owner API；`goal_monitor` 改讀 `thread_goals`（§7.2）；delegation 鏈接上 `thread_id`（§7.3） | **不啟動 Orca 與 Herdr 也能完成驗收**；agent 宣告 `done` 不改變驗收狀態；版本錯誤、過期、hash 不符皆被阻擋；每個 monitor 綁定都帶原生 `goal_id`，schema 不符時回報 `unverifiable` 而非猜測；每筆 `AgentDelegation` 都帶 `thread_id` 並對得到唯一一個 rollout 檔 |
 | 2 接入唯讀 Orca | CLI adapter、明確工作綁定、來源與新鮮度標示 | 重複輪詢不產生重複領域事件；Orca 中斷顯示 `unknown`；重啟不誤綁其他 session；執行紀錄中無傳訊或建立工作的命令 |
 | 3 移植獨立巡查 | 不同 session 的查核者、固定證據輸入、查核報告；待決事項輸出為 Orca gate 參照（§7.1） | 刻意失敗測試／缺證據／錯 commit 三組案例分別得到失敗／不可驗證／版本不符；查核者無法建立 owner 驗收；ACC 內不存在第二套待辦狀態機 |
 | 4 退役 Herdr | 舊綁定結案、移除程式與 UI 入口 | 無 Herdr 安裝的環境可跑完「成果→實作→證據→巡查→owner 驗收」；舊歷史可查閱；執行紀錄無 Herdr／capture-pane 呼叫 |
