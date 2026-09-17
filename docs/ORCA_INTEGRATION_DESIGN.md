@@ -273,6 +273,27 @@ Claude 原生 goal_id（attachment.goal_status）
 該 agent 明確禁止用時間、cwd 或「最新的 rollout 檔」推測是哪一次執行——
 平行外包時那會綁錯對象。這與 §9.2 的原則一致。
 
+#### 派工指令的形狀是產品約束
+
+實作後用本 session 真實的派工紀錄驗證，結果**全部 unverified**。原因不是綁定寫錯，
+而是真實指令長這樣：
+
+```text
+... )" > "$S/luna-events.jsonl" 2>"$S/luna-err.log"; echo "EXIT=$?"; head -1 "$S/luna-events.jsonl"
+```
+
+兩個問題，綁定拒絕兩次都是對的：
+
+1. 路徑是 shell 變數 `$S`。ACC 不展開 shell 變數——展開就是猜。
+2. 指令不以導向結尾，後面還接著 `2>`、`; echo`、`; head`。
+   複合指令裡有多個導向時，挑哪一個都是猜。
+
+修法是**約束派工端，不是放寬驗證端**。`codex-worker` 已加上規定：
+事件檔必須是字面絕對路徑，`codex exec` 要自成一句並以導向結尾，要看結果另外下一句。
+
+不符合這個形狀不會出錯，只是那筆委派在控制台顯示「未驗證 child Goal」——
+這正是預期行為。
+
 #### 限制
 
 1. **只涵蓋由 `codex-worker` 發動的外包。** 使用者自己在 TUI 開的 Codex pane
